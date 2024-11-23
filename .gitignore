@@ -1,3 +1,7 @@
 tests/out/
 *.jtl
 report/
+tests/out/
+*.jtl
+report/
+.env/
