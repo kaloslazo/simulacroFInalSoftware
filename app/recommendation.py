@@ -12,12 +12,12 @@ class MovieRecommender:
     @lru_cache(maxsize=1000)
     def get_recommendations(self, user_id: int, limit: int = 5) -> List[Movie]:
         start_time = time.time()
-        
+
         # Usar caché para preferencias
         user_prefs = self.db.query(UserPreference)\
             .filter(UserPreference.user_id == user_id)\
             .first()
-            
+
         if not user_prefs:
             return []
 

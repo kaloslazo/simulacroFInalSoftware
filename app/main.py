@@ -55,9 +55,11 @@ def get_recommendations(user_id: int, db: Session = Depends(get_db)):
             return recommendations_cache[cache_key]
 
         # Obtener preferencias
-        user_pref = db.query(UserPreference)\
-            .filter(UserPreference.user_id == user_id)\
-            .first()
+        user_pref = db.execute(
+            select(UserPreference)
+            .where(UserPreference.user_id == user_id)
+            .limit(1)
+        ).scalar_one_or_none()
             
         if not user_pref:
             return []

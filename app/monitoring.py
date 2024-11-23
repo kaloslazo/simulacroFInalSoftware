@@ -1,4 +1,3 @@
-# app/monitoring.py
 import time
 import statistics
 from typing import Dict, List
@@ -13,11 +12,9 @@ class ServiceMonitor:
         self.requests: List[Dict] = []
         self.total_requests = 0
         self.failed_requests = 0
-        
-        # Cache para métricas
         self._metrics_cache = {}
         self._last_cache_time = 0
-        self._cache_ttl = 1  # 1 segundo de TTL para el caché
+        self._cache_ttl = 1
 
     def _clean_old_requests(self):
         current_time = time.time()
@@ -26,10 +23,8 @@ class ServiceMonitor:
 
     def record_request(self, duration: float, success: bool):
         current_time = time.time()
+        is_error = not success and duration > 0.001
         
-        # No considerar errores 404 como fallos
-        is_error = not success and duration > 0.001  # Solo contar errores reales
-
         self.requests.append({
             "timestamp": current_time,
             "duration": duration,
@@ -40,14 +35,11 @@ class ServiceMonitor:
         self.total_requests += 1
         if is_error:
             self.failed_requests += 1
-
-        # Limpiar caché de métricas
+        
         self._metrics_cache = {}
 
     def get_metrics(self) -> Dict:
         current_time = time.time()
-        
-        # Usar caché si está disponible y vigente
         if self._metrics_cache and (current_time - self._last_cache_time) < self._cache_ttl:
             return self._metrics_cache.copy()
 
@@ -61,24 +53,29 @@ class ServiceMonitor:
                 "total_requests": 0,
                 "failed_requests": 0,
                 "requests_last_hour": 0,
-                "latency_p95": None
+                "latency_p95": 0
             }
 
-        # Calcular métricas solo con requests recientes
-        recent_requests = [r for r in self.requests if r["timestamp"] > (current_time - 300)]  # últimos 5 minutos
+        recent_requests = [r for r in self.requests if r["timestamp"] > (current_time - 300)]
         
         if recent_requests:
             successful_requests = sum(1 for r in recent_requests if r["success"])
             availability = (successful_requests / len(recent_requests)) * 100
             
-            # Calcular confiabilidad basada en latencia
             durations = [r["duration"] for r in recent_requests]
             avg_duration = statistics.mean(durations)
+            
+            # Calcular el percentil 95 de latencia
+            sorted_durations = sorted(durations)
+            p95_index = int(len(sorted_durations) * 0.95)
+            latency_p95 = sorted_durations[p95_index] if p95_index < len(sorted_durations) else sorted_durations[-1]
+            
             reliability = sum(1 for d in durations if d < 0.001) / len(durations) * 100
         else:
             availability = 100.0
             reliability = 100.0
             avg_duration = 0
+            latency_p95 = 0
 
         metrics = {
             "availability": availability,
@@ -87,11 +84,10 @@ class ServiceMonitor:
             "total_requests": self.total_requests,
             "failed_requests": self.failed_requests,
             "requests_last_hour": len(self.requests),
-            "latency_p95": statistics.quantiles(durations, n=20)[18] if len(durations) >= 20 else None
+            "latency_p95": latency_p95
         }
 
-        # Actualizar caché
         self._metrics_cache = metrics.copy()
         self._last_cache_time = current_time
-
+        
         return metrics

@@ -1,36 +1,46 @@
-from sqlalchemy import create_engine, text
-import time
+import pytest
+from sqlalchemy.orm import Session
+from .database import get_db, Movie, UserPreference, init_database, Base, engine
 
-SUPABASE_PASSWORD = "cerveceroyosoyymividasevaacabando"
-SUPABASE_URL = f"postgresql://postgres:{SUPABASE_PASSWORD}@db.wshqdpedakskoyqvtwqw.supabase.co:5432/postgres"
+@pytest.fixture(autouse=True)
+def setup_database():
+    Base.metadata.create_all(bind=engine)
+    init_database()
+    yield
+    Base.metadata.drop_all(bind=engine)
 
-def test_connection():
-    print("Probando conexión a Supabase...")
+def test_db_connection():
+    db = next(get_db())
+    assert isinstance(db, Session)
+    db.close()
+
+def test_movie_creation():
+    db = next(get_db())
+    movie = Movie(
+        title="Test Movie",
+        genre="Action",
+        rating=8.5,
+        year=2024
+    )
+    db.add(movie)
+    db.commit()
     
-    try:
-        engine = create_engine(SUPABASE_URL, echo=True)
-        with engine.connect() as conn:
-            # Usar text() para crear una consulta ejecutable
-            result = conn.execute(text("SELECT 1"))
-            first_result = result.scalar()
-            print(f"¡Conexión exitosa! Resultado: {first_result}")
-            
-            # Probar que podemos ver las tablas
-            print("\nListando tablas existentes:")
-            tables = conn.execute(text("""
-                SELECT table_name 
-                FROM information_schema.tables 
-                WHERE table_schema = 'public'
-            """))
-            
-            for table in tables:
-                print(f"- {table[0]}")
-            
-            return True
-            
-    except Exception as e:
-        print(f"Error de conexión: {e}")
-        return False
+    fetched_movie = db.query(Movie).filter(Movie.title == "Test Movie").first()
+    assert fetched_movie is not None
+    assert fetched_movie.genre == "Action"
+    db.close()
 
-if __name__ == "__main__":
-    test_connection()
+def test_user_preference_creation():
+    db = next(get_db())
+    pref = UserPreference(
+        user_id=999,
+        movie_min_rating=7.5,
+        movie_genre="Sci-Fi"
+    )
+    db.add(pref)
+    db.commit()
+    
+    fetched_pref = db.query(UserPreference).filter(UserPreference.user_id == 999).first()
+    assert fetched_pref is not None
+    assert fetched_pref.movie_genre == "Sci-Fi"
+    db.close()
